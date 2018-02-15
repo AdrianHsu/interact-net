@@ -3,43 +3,66 @@
 import os
 import numpy as np
 import glob
-# import tensorflow as tf
-# import tensorflow.contrib.slim as slim
+import tensorflow as tf
+import tensorflow.contrib.slim as slim
 import cv2
 import matplotlib.pyplot as plt
 import random
-# import vgg
+
 
 LEARNING_RATE = 1e-3
 EPOCHES = 100
 CROP_SIZE = 224
 NUM_CHANNELS = 3 # RGB
 BATCH_SIZE = 100 # take 100 photos
-VGG_MEAN = np.array([104., 117., 123.], dtype='float32')
+# VGG_MEAN = [103.939, 116.779, 123.68] # rgb
+VGG_MEAN = [123.68, 116.78, 103.94] # bgr
 
 ROOT_PATH = '/Users/adrianhsu/Desktop/interact-net/'
 
-images = open(ROOT_PATH + 'train.txt', 'r')
-for img_path in images:
-	ALL_COLOR = 1 # 0 is grey scale
-	img_path = img_path.split('\n')[0] # remove '\n'
-	frame = cv2.imread(img_path, ALL_COLOR)
-	x = frame.shape[0]
-	y = frame.shape[1]
-	# print('original shape: ' + str(x) +  ', ' + str(y))
-	dmin = min(x, y)
-	ratio = 256.0/dmin
-	frame = cv2.resize(frame, None, fx=ratio, fy=ratio)
 
-	x = frame.shape[0]
-	y = frame.shape[1]
-	# print('modified shape: ' + str(frame.shape[0]) +  ', ' + str(frame.shape[1]))
+def _parse_function(filename, label):
+  image_string = tf.read_file(filename)
+  image_decoded = tf.image.decode_jpeg(image_string, channels=3)
+  image = tf.cast(image_decoded, tf.float32)
 
-	x = round((x - CROP_SIZE) / 2)
-	y = round((y - CROP_SIZE) / 2)
+  smallest_side = 256.0
+  height, width = tf.shape(image)[0], tf.shape(image)[1]
+  height = tf.to_float(height)
+  width = tf.to_float(width)
 
-	crop = frame[x : x + CROP_SIZE, y : y + CROP_SIZE, :]
-	# cv2.imshow('image', crop)
-	# cv2.waitKey()
-	crop -= VGG_MEAN
-	crop = crop.flatten()
+  scale = tf.cond(tf.greater(height, width),
+                  lambda: smallest_side / width,
+                  lambda: smallest_side / height)
+  new_height = tf.to_int32(height * scale)
+  new_width = tf.to_int32(width * scale)
+
+  resized_image = tf.image.resize_images(image, [new_height, new_width]) 
+  return resized_image, label
+def training_preprocess(image, label):
+  crop_image = tf.random_crop(image, [224, 224, 3])
+  flip_image = tf.image.random_flip_left_right(crop_image)
+
+  means = tf.reshape(tf.constant(VGG_MEAN), [1, 1, 3])
+  centered_image = flip_image - means
+
+  return centered_image, label
+
+train_log_dir = 'ROOT_PATH' + 'logs'
+if not tf.gfile.Exists(train_log_dir):
+  tf.gfile.MakeDirs(train_log_dir)
+
+images = []
+labels = []
+img_path = '/Users/adrianhsu/Desktop/v-coco/coco/images/train2017/000000000165.jpg'
+train_filenames = [img_path, img_path]
+train_labels = [1, 2]
+
+train_dataset = tf.contrib.data.Dataset.from_tensor_slices((train_filenames, train_labels))
+train_dataset = train_dataset.map(_parse_function,
+    num_threads=4, output_buffer_size=32)
+train_dataset = train_dataset.map(training_preprocess,
+            num_threads=4, output_buffer_size=32)
+train_dataset = train_dataset.shuffle(buffer_size=10000)
+
+# vgg = slim.nets.vgg.vgg_16(images, is_training=True)
