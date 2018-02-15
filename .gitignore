@@ -1,0 +1,6 @@
+__pycache__
+dat/
+.DS_Store
+*.jpg
+*.pkl
+*.npy
