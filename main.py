@@ -20,7 +20,6 @@ VGG_MEAN = np.array([104., 117., 123.], dtype='float32')
 ROOT_PATH = '/Users/adrianhsu/Desktop/interact-net/'
 
 images = open(ROOT_PATH + 'train.txt', 'r')
-img_path = ''
 for img_path in images:
 	ALL_COLOR = 1 # 0 is grey scale
 	img_path = img_path.split('\n')[0] # remove '\n'
